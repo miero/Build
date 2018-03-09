@@ -163,7 +163,6 @@ function startFlow() {
                     });
                 } else {
                     var SSID = undefined;
-                    var ifconfig = require('wireless-tools/ifconfig');
                     console.log("trying...");
                     try {
                         var SSID = execSync("/usr/bin/sudo /sbin/iwgetid -r", { uid: 1000, gid: 1000, encoding: 'utf8'});
@@ -172,25 +171,17 @@ function startFlow() {
                         //console.log('ERROR: '+e)
                     }
 
-
                     if (SSID != undefined) {
-                        ifconfig.status(wlan, function (err, ifstatus) {
-                            console.log("... joined AP, wlan0 IPv4 is " + ifstatus.ipv4_address + ", ipV6 is " + ifstatus.ipv6_address);
-                            if (((ifstatus.ipv4_address != undefined) &&
-                                (ifstatus.ipv4_address.length > "0.0.0.0".length))
-                                ||
-                                ((ifstatus.ipv6_address != undefined) &&
-                                (ifstatus.ipv6_address.length > "::".length))) {
-                                if (apstopped == 0) {
-                                    console.log("It's done! AP");
-                                    wstatus("ap");
-                                    clearTimeout(lesstimer);
-                                    restartAvahi();
-                                }
-                            }
-                        });
+                        var ipv4 = execSync("ip addr show wlan0 | grep \"inet\" | awk '{print $2}' | awk -F \"/\" '{print $1}' | sed '2d' | tr -d '\n'", { encoding: 'utf8' });
+                        if (ipv4 != undefined && (ipv4.length > "0.0.0.0".length)) {
+                if (apstopped == 0) {
+                    console.log("It's done! AP");
+                    wstatus("ap");
+                    clearTimeout(lesstimer);
+                    restartAvahi();
+                }
+            }
                     }
-
                 }
             }, pollingTime * 1000);
         });
