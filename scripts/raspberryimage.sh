@@ -24,9 +24,9 @@ dd if=/dev/zero of=${IMG_FILE} bs=1M count=2800
 LOOP_DEV=`sudo losetup -f --show ${IMG_FILE}`
 
 sudo parted -s "${LOOP_DEV}" mklabel msdos
-sudo parted -s "${LOOP_DEV}" mkpart primary fat32 0 64
-sudo parted -s "${LOOP_DEV}" mkpart primary ext3 64 2500
-sudo parted -s "${LOOP_DEV}" mkpart primary ext3 2500 2800
+sudo parted -s "${LOOP_DEV}" mkpart primary fat32 64s 64MiB
+sudo parted -s "${LOOP_DEV}" mkpart primary ext3 64MiB 2400MiB
+sudo parted -s "${LOOP_DEV}" mkpart primary ext3 2400MiB -- -1s
 sudo parted -s "${LOOP_DEV}" set 1 boot on
 sudo parted -s "${LOOP_DEV}" print
 sudo partprobe "${LOOP_DEV}"
@@ -157,6 +157,9 @@ cp Volumio.sqsh /mnt/volumio/images/volumio_current.sqsh
 echo "Unmounting Temp Devices"
 sudo umount -l /mnt/volumio/images
 sudo umount -l /mnt/volumio/rootfs/boot
+
+zerofree -f 255 ${IMG_PART}
+zerofree -f 255 ${DATA_PART}
 
 dmsetup remove_all
 sudo losetup -d ${LOOP_DEV}
