@@ -1,0 +1,14 @@
+#
+# Execute these commands on a clean Debian Jessie installation (for example running in VirtualBox)
+#
+# Notice: newer Debian does not work properly with Volumio's multistrap configuration
+#
+
+apt update
+apt install git squashfs-tools kpartx multistrap qemu-user-static samba debootstrap parted dosfstools qemu binfmt-support qemu-utils sudo zerofree
+
+cd ~
+git clone https://github.com/volumio/Build build
+cd build
+./build.sh -b arm
+./build.sh -d pi -v _HermesPi_v2
