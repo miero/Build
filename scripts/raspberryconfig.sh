@@ -133,7 +133,7 @@ case $KERNEL_VERSION in
 esac
 
 # using rpi-update relevant to defined kernel version
-echo y | SKIP_BACKUP=1 WANT_PI4=1 SKIP_CHECK_PARTITION=1 UPDATE_SELF=0 /usr/bin/rpi-update $KERNEL_COMMIT
+echo y | WANT_SYMVERS=1 SKIP_BACKUP=1 WANT_PI4=1 SKIP_CHECK_PARTITION=1 UPDATE_SELF=0 /usr/bin/rpi-update $KERNEL_COMMIT
 
 echo "Getting actual kernel revision with firmware revision backup"
 cp /boot/.firmware_revision /boot/.firmware_revision_kernel
@@ -302,6 +302,49 @@ rm /patch
 if [ "$PATCH" = "volumio" ] || [ "$PATCH" = "my-volumio" ]; then
 
 echo "Adding third party Firmware"
+
+echo "Installing Twisted Pear Audio Hermes-RPi Firmware"
+apt-get -y install gcc make unzip bison flex libssl-dev
+if [ -f /boot/git_hash ]; then
+    GITHASH=`cat /boot/git_hash`
+else
+    GITHASH=`wget --no-check-certificate -O- https://raw.githubusercontent.com/Hexxeh/rpi-firmware/$FIRMWARE_COMMIT/git_hash`
+fi
+cd /root
+if [ ! -f "$GITHASH.zip" ]; then
+    wget https://github.com/raspberrypi/linux/archive/$GITHASH.zip
+fi
+unzip -q $GITHASH.zip
+git clone https://github.com/miero/tpa-hermes-rpi-dev.git
+for cfg in bcm2709 bcmrpi; do
+    cd /root/linux-$GITHASH
+    make mrproper
+    cp -f arch/arm/configs/${cfg}_defconfig .config
+    if [ "$cfg" = bcm2709 ]; then
+        # add '+' to kernel version
+        sed -i '/CONFIG_LOCALVERSION=/ { s/"$/+"/; s/++/+/; }' .config
+        SYMVERS=Module7.symvers
+    else
+        # add '+' to kernel version
+        echo 'CONFIG_LOCALVERSION="+"' >> .config
+        SYMVERS=Module.symvers
+    fi
+    make olddefconfig prepare modules_prepare
+    if [ -f /boot/$SYMVERS ]; then
+        cp -f /boot/$SYMVERS Module.symvers
+    else
+        wget --no-check-certificate -O Module.symvers https://github.com/Hexxeh/rpi-firmware/raw/$FIRMWARE_COMMIT/$SYMVERS
+    fi
+
+    cd /root/tpa-hermes-rpi-dev
+    make KDIR=/root/linux-$GITHASH clean install
+done
+cd /root
+rm -rf $GITHASH.zip linux-$GITHASH tpa-hermes-rpi-dev
+apt-get -y --auto-remove remove gcc make unzip bison flex libssl-dev
+# no auto-detection, forcing to load at boot
+echo "dtoverlay=tpa-hermes-rpi" >> /boot/config.txt
+
 cd /
 echo "Getting Allo Piano Firmware"
 wget --no-check-certificate  https://github.com/allocom/piano-firmware/archive/master.tar.gz
