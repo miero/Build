@@ -5,7 +5,7 @@ PATCH=$(cat /patch)
 # This script will be run in chroot under qemu.
 
 echo "Creating \"fstab\""
-echo "# sparky fstab" > /etc/fstab
+echo "# OrangePi fstab" > /etc/fstab
 echo "" >> /etc/fstab
 echo "proc            /proc           proc    defaults        0       0
 /dev/mmcblk0p1  /boot           vfat    defaults,utf8,user,rw,umask=111,dmask=000        0       1
@@ -16,22 +16,24 @@ tmpfs   /tmp                    tmpfs   defaults,noatime,mode=0755 0 0
 tmpfs   /dev/shm                tmpfs   defaults,nosuid,noexec,nodev        0 0
 " > /etc/fstab
 
-#echo "Adding default sound module"
-#echo "snd-soc-allo-piano-dac-plus
-#snd-soc-allo-piano-dac" >> /etc/modules
+#echo "Adding default sound modules and wifi"
+#echo "sunxi_codec
+#sunxi_i2s
+#sunxi_sndcodec
+#8723bs
+#" >> /etc/modules
 
-echo "Blacklisting noisy module"
-echo "blacklist ctp_gsl3680" > /etc/modprobe.d/blacklist.conf
+#echo "Blacklisting 8723bs_vq0"
+#echo "blacklist 8723bs_vq0" >> /etc/modprobe.d/blacklist-pine64.conf
+
+apt-get update
+apt-get -y install u-boot-tools liblircclient0 lirc aptitude bc
 
 echo "Installing additonal packages"
-apt-get update
-apt-get -y install u-boot-tools
-
-wget  https://raw.githubusercontent.com/sparkysbc/downloads/master/wiringSparky.tgz
-tar -xzvf wiringSparky.tgz -C /
-rm wiringSparky.tgz 
+apt-get install -qq -y dialog debconf-utils lsb-release aptitude
 
 echo "Adding custom modules overlayfs, squashfs and nls_cp437"
+echo "overlay" >> /etc/initramfs-tools/modules
 echo "overlayfs" >> /etc/initramfs-tools/modules
 echo "squashfs" >> /etc/initramfs-tools/modules
 echo "nls_cp437" >> /etc/initramfs-tools/modules
@@ -53,21 +55,23 @@ sh patch.sh
 else
 echo "Cannot Find Patch File, aborting"
 fi
-if [ -f "install.sh" ]; then
-sh install.sh
-fi
 cd /
 rm -rf ${PATCH}
 fi
 rm /patch
 
-echo "Changing to 'modules=dep'"
-echo "(otherwise sparky may not boot due to size of initrd)"
-sed -i "s/MODULES=most/MODULES=dep/g" /etc/initramfs-tools/initramfs.conf
-
 echo "Installing winbind here, since it freezes networking"
 apt-get update
 apt-get install -y winbind libnss-winbind
+
+echo "adding gpio group and udev rules"
+groupadd -f --system gpio
+usermod -aG gpio volumio
+touch /etc/udev/rules.d/99-gpio.rules
+echo "SUBSYSTEM==\"gpio\", ACTION==\"add\", RUN=\"/bin/sh -c '
+        chown -R root:gpio /sys/class/gpio && chmod -R 770 /sys/class/gpio;\
+        chown -R root:gpio /sys$DEVPATH && chmod -R 770 /sys$DEVPATH\
+'\"" > /etc/udev/rules.d/99-gpio.rules
 
 echo "Cleaning APT Cache and remove policy file"
 rm -f /var/lib/apt/lists/*archive*
@@ -82,8 +86,7 @@ echo "Creating initramfs 'volumio.initrd'"
 mkinitramfs-custom.sh -o /tmp/initramfs-tmp
 
 echo "Creating uInitrd from 'volumio.initrd'"
-mkimage -A arm -O linux -T ramdisk -C none -a 0 -e 0 -n uInitrd -d /boot/volumio.initrd /boot/ramdisk.img
-#TODO update uenv.txt to use uInitrd as the ramdisk name (like all other platforms)
-
-echo "Removing unnecessary /boot files"
-rm /boot/volumio.initrd
+mkimage -A arm -O linux -T ramdisk -C none -a 0 -e 0 -n uInitrd -d /boot/volumio.initrd /boot/uInitrd
+mkimage -A arm -T script -C none -d /boot/boot.cmd /boot/boot.scr
+echo "Cleaning up"
+# rm /boot/volumio.initrd

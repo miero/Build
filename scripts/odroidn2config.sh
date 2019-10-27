@@ -3,12 +3,14 @@
 PATCH=$(cat /patch)
 
 # This script will be run in chroot under qemu.
+echo "Initializing.."
+. init.sh
 
 echo "Creating \"fstab\""
-echo "# sparky fstab" > /etc/fstab
+echo "# Odroid N2 fstab" > /etc/fstab
 echo "" >> /etc/fstab
 echo "proc            /proc           proc    defaults        0       0
-/dev/mmcblk0p1  /boot           vfat    defaults,utf8,user,rw,umask=111,dmask=000        0       1
+UUID=${UUID_BOOT}     /boot           vfat    defaults,utf8,user,rw,umask=111,dmask=000        0       1
 tmpfs   /var/log                tmpfs   size=20M,nodev,uid=1000,mode=0777,gid=4, 0 0
 tmpfs   /var/spool/cups         tmpfs   defaults,noatime,mode=0755 0 0
 tmpfs   /var/spool/cups/tmp     tmpfs   defaults,noatime,mode=0755 0 0
@@ -16,23 +18,27 @@ tmpfs   /tmp                    tmpfs   defaults,noatime,mode=0755 0 0
 tmpfs   /dev/shm                tmpfs   defaults,nosuid,noexec,nodev        0 0
 " > /etc/fstab
 
-#echo "Adding default sound module"
-#echo "snd-soc-allo-piano-dac-plus
-#snd-soc-allo-piano-dac" >> /etc/modules
+echo "Creating boot.ini from template"
+sed -i "s/%%VOLUMIO-PARAMS%%/imgpart=UUID=${UUID_IMG} imgfile=\/volumio_current.sqsh hwdevice=Odroid-N2 bootpart=UUID=${UUID_BOOT} datapart=UUID=${UUID_DATA} bootconfig=boot.ini/g" /boot/boot.ini
 
-echo "Blacklisting noisy module"
-echo "blacklist ctp_gsl3680" > /etc/modprobe.d/blacklist.conf
 
-echo "Installing additonal packages"
+echo "Fixing armv8 deprecated instruction emulation with armv7 rootfs"
+echo "abi.cp15_barrier=2" >> /etc/sysctl.conf
+
+echo "#!/bin/sh -e
+#/usr/local/bin/n2-init.sh
+exit 0" > /etc/rc.local
+
+echo "Installing additional packages"
 apt-get update
-apt-get -y install u-boot-tools
+apt-get -y install u-boot-tools liblircclient0 lirc fbset
 
-wget  https://raw.githubusercontent.com/sparkysbc/downloads/master/wiringSparky.tgz
-tar -xzvf wiringSparky.tgz -C /
-rm wiringSparky.tgz 
+echo "Cleaning APT Cache and remove policy file"
+rm -f /var/lib/apt/lists/*archive*
+apt-get clean
 
 echo "Adding custom modules overlayfs, squashfs and nls_cp437"
-echo "overlayfs" >> /etc/initramfs-tools/modules
+echo "overlay" >> /etc/initramfs-tools/modules
 echo "squashfs" >> /etc/initramfs-tools/modules
 echo "nls_cp437" >> /etc/initramfs-tools/modules
 
@@ -61,8 +67,8 @@ rm -rf ${PATCH}
 fi
 rm /patch
 
-echo "Changing to 'modules=dep'"
-echo "(otherwise sparky may not boot due to size of initrd)"
+echo "Changing to 'modules=dep' to minimise uInitrd size"
+echo "(otherwise Odroid may not boot)"
 sed -i "s/MODULES=most/MODULES=dep/g" /etc/initramfs-tools/initramfs.conf
 
 echo "Installing winbind here, since it freezes networking"
@@ -82,8 +88,7 @@ echo "Creating initramfs 'volumio.initrd'"
 mkinitramfs-custom.sh -o /tmp/initramfs-tmp
 
 echo "Creating uInitrd from 'volumio.initrd'"
-mkimage -A arm -O linux -T ramdisk -C none -a 0 -e 0 -n uInitrd -d /boot/volumio.initrd /boot/ramdisk.img
-#TODO update uenv.txt to use uInitrd as the ramdisk name (like all other platforms)
+mkimage -A arm64 -O linux -T ramdisk -C none -a 0 -e 0 -n uInitrd -d /boot/volumio.initrd /boot/uInitrd
 
 echo "Removing unnecessary /boot files"
 rm /boot/volumio.initrd

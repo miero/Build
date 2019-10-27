@@ -23,7 +23,7 @@ echo "label kernel-4.4
     kernel /zImage
     fdt /dtb/rk3288-miniarm.dtb
     initrd /uInitrd
-    append  earlyprintk splash plymouth.ignore-serial-consoles console=tty1 console=ttyS3,115200n8 rw init=/sbin/init imgpart=UUID=${UUID_IMG} imgfile=/volumio_current.sqsh bootpart=UUID=${UUID_BOOT} datapart=UUID=${UUID_DATA} bootconfig=/extlinux/extlinux.conf logo.nologo vt.global_cursor_default=0 loglevel=0
+    append  earlyprintk splash plymouth.ignore-serial-consoles console=tty1 console=ttyS3,115200n8 rw init=/sbin/init imgpart=UUID=${UUID_IMG} imgfile=/volumio_current.sqsh bootpart=UUID=${UUID_BOOT} datapart=UUID=${UUID_DATA} bootconfig=/extlinux/extlinux.conf
 " > /boot/extlinux/extlinux.conf 
 
 echo "Adding default sound modules"
@@ -72,11 +72,6 @@ wget http://repo.volumio.org/Volumio2/Firmwares/rtl_bt_tinkerboard.tar.gz
 tar xf rtl_bt_tinkerboard.tar.gz -C /
 rm rtl_bt_tinkerboard.tar.gz
 systemctl enable tinkerbt.service
-
-echo "Installing updated Realtek firmwares"
-wget http://repo.volumio.org/Volumio2/Firmwares/firmware-realtek_20190114-2_all.deb
-sudo dpkg -i firmware-realtek_20190114-2_all.deb
-rm firmware-realtek_20190114-2_all.deb
 
 echo "Installing additonal packages"
 apt-get update

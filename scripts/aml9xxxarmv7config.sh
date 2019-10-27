@@ -23,6 +23,12 @@ echo "#!/bin/sh -e
 /etc/fan.sh &
 exit 0" > /etc/rc.local
 
+echo "Adding default sound modules and wifi"
+echo "dhd
+snd_soc_pcm5102
+snd_soc_odroid_dac
+" >> /etc/modules
+
 echo "Installing additonal packages"
 apt-get update
 apt-get -y install u-boot-tools liblircclient0 lirc mc abootimg fbset
@@ -53,6 +59,9 @@ if [ -f "patch.sh" ]; then
 sh patch.sh
 else
 echo "Cannot Find Patch File, aborting"
+fi
+if [ -f "install.sh" ]; then
+sh install.sh
 fi
 cd /
 rm -rf ${PATCH}

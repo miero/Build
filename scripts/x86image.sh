@@ -16,7 +16,7 @@ IMG_FILE="Volumio${VERSION}-${BUILDDATE}-x86.img"
 
 echo "Creating Image Bed"
 echo "Image file: ${IMG_FILE}"
-dd if=/dev/zero of=${IMG_FILE} bs=1M count=3900
+dd if=/dev/zero of=${IMG_FILE} bs=1M count=3700
 LOOP_DEV=`sudo losetup -f --show ${IMG_FILE}`
 
 sudo parted -s "${LOOP_DEV}" mklabel gpt
@@ -82,7 +82,7 @@ sudo mount -t vfat "${BOOT_PART}" /mnt/volumio/rootfs/boot
 cp scripts/x86config.sh /mnt/volumio/rootfs
 if [ ! -d platform-x86 ]; then
   echo "Platform files (packages) not available yet, getting them from the repo"
-  git clone http://github.com/volumio/platform-x86
+  git clone --depth 1 http://github.com/volumio/platform-x86
 fi
 
 if [ -f platform-x86/packages/.next ]; then
@@ -126,11 +126,31 @@ BOOT_PART=${BOOT_PART}
 " >> /mnt/volumio/rootfs/init.sh
 chmod +x /mnt/volumio/rootfs/init.sh
 
-
 echo $PATCH > /mnt/volumio/rootfs/patch
+
+if [ -f "/mnt/volumio/rootfs/$PATCH/patch.sh" ] && [ -f "config.js" ]; then
+        if [ -f "UIVARIANT" ] && [ -f "variant.js" ]; then
+                UIVARIANT=$(cat "UIVARIANT")
+                echo "Configuring variant $UIVARIANT"
+                echo "Starting config.js for variant $UIVARIANT"
+                node config.js $PATCH $UIVARIANT
+                echo $UIVARIANT > /mnt/volumio/rootfs/UIVARIANT
+        else
+                echo "Starting config.js"
+                node config.js $PATCH
+        fi
+fi
+
 chroot /mnt/volumio/rootfs /bin/bash -x <<'EOF'
 /x86config.sh -p
 EOF
+
+UIVARIANT_FILE=/mnt/volumio/rootfs/UIVARIANT
+if [ -f "${UIVARIANT_FILE}" ]; then
+    echo "Starting variant.js"
+    node variant.js
+    rm $UIVARIANT_FILE
+fi
 
 rm /mnt/volumio/rootfs/linux-image-*.deb
 rm /mnt/volumio/rootfs/init.sh /mnt/volumio/rootfs/linux-firmware-*.deb
@@ -144,6 +164,9 @@ sudo umount -l /mnt/volumio/rootfs/proc
 sudo umount -l /mnt/volumio/rootfs/sys
 
 echo "X86 device installed"
+
+echo "Finalizing Rootfs creation"
+sh scripts/finalize.sh
 
 echo "Preparing rootfs base for SquashFS"
 
@@ -179,9 +202,6 @@ rm -rf /mnt/squash
 
 #copy the squash image inside the boot partition
 cp Volumio.sqsh /mnt/volumio/images/volumio_current.sqsh
-
-echo "Signalling the init script to move the backup GPT table to the end of the disk "
-touch /mnt/volumio/images/move-gpt
 sync
 
 echo "Unmounting Temp Devices"
@@ -202,6 +222,8 @@ echo "Cleaning build environment"
 sudo dmsetup remove_all
 sudo losetup -d ${LOOP_DEV}
 sync
+
+md5sum "$IMG_FILE" > "${IMG_FILE}.md5"
 
 echo "X86 Image file created"
 echo "Building VMDK Virtual Image File"

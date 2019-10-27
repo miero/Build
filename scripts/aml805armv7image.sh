@@ -69,7 +69,7 @@ then
 	cd ..
 else
 	echo "Clone all AML files from repo"
-	git clone https://github.com/150balbes/platform-aml.git platform-aml
+	git clone --depth 1 https://github.com/150balbes/platform-aml.git platform-aml
 #	cd ..
 fi
 
@@ -109,6 +109,8 @@ echo "Copying etc files"
 cp -pdR platform-aml/s805/etc/* /mnt/volumio/rootfs/etc
 echo "Copying usr/bin files"
 cp -pdR platform-aml/s805/usr/* /mnt/volumio/rootfs/usr
+echo "Copying volumio fix"
+cp -pdR platform-aml/s805/volumio/* /mnt/volumio/rootfs/volumio
 sync
 
 echo "Preparing to run chroot for more AML configuration"
@@ -144,6 +146,9 @@ echo "==> AML device installed"
 #echo "(you can keep it safely as long as you're sure of no changes)"
 #rm -r platform-aml
 sync
+
+echo "Finalizing Rootfs creation"
+sh scripts/finalize.sh
 
 echo "Preparing rootfs base for SquashFS"
 
@@ -187,3 +192,5 @@ umount -l /mnt/volumio/rootfs/boot
 dmsetup remove_all
 losetup -d ${LOOP_DEV}
 sync
+
+md5sum "$IMG_FILE" > "${IMG_FILE}.md5"

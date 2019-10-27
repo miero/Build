@@ -1,14 +1,12 @@
 [Unit]
+Description = Xbindrc
 
 [Service]
-Type=forking
-ExecStartPre=-/usr/bin/sudo /usr/bin/killall dhcpcd
-ExecStart=/sbin/dhcpcd -d
-KillMode=mixed
+ExecStart=/usr/bin/xbindkeys -X :0 -f /etc/xbindkeysrc
 Restart=always
 StandardOutput=syslog
 StandardError=syslog
-SyslogIdentifier=dhcpcd
+SyslogIdentifier=xbindrc
 User=root
 Group=root
 

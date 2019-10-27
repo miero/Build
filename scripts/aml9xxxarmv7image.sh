@@ -27,7 +27,6 @@ else
 fi
 
 echo "Creating Image File ${IMG_FILE} with ${DISTRO} rootfs"
-
 dd if=/dev/zero of=${IMG_FILE} bs=1M count=2800
 
 echo "Creating Image Bed"
@@ -69,7 +68,7 @@ then
 	cd ..
 else
 	echo "Clone all AML files from repo"
-	git clone https://github.com/150balbes/platform-aml.git platform-aml
+	git clone --depth 1 https://github.com/150balbes/platform-aml.git platform-aml
 #	cd ..
 fi
 
@@ -109,6 +108,8 @@ echo "Copying etc files"
 cp -pdR platform-aml/s9xxx/etc/* /mnt/volumio/rootfs/etc
 echo "Copying usr/bin files"
 cp -pdR platform-aml/s9xxx/usr/* /mnt/volumio/rootfs/usr
+echo "Copying volumio fix"
+cp -pdR platform-aml/s9xxx/volumio/* /mnt/volumio/rootfs/volumio
 sync
 
 echo "Preparing to run chroot for more AML configuration"
@@ -122,6 +123,19 @@ mount /dev /mnt/volumio/rootfs/dev -o bind
 mount /proc /mnt/volumio/rootfs/proc -t proc
 mount /sys /mnt/volumio/rootfs/sys -t sysfs
 echo $PATCH > /mnt/volumio/rootfs/patch
+
+if [ -f "/mnt/volumio/rootfs/$PATCH/patch.sh" ] && [ -f "config.js" ]; then
+        if [ -f "UIVARIANT" ] && [ -f "variant.js" ]; then
+                UIVARIANT=$(cat "UIVARIANT")
+                echo "Configuring variant $UIVARIANT"
+                echo "Starting config.js for variant $UIVARIANT"
+                node config.js $PATCH $UIVARIANT
+                echo $UIVARIANT > /mnt/volumio/rootfs/UIVARIANT
+        else
+                echo "Starting config.js"
+                node config.js $PATCH
+        fi
+fi
 
 chroot /mnt/volumio/rootfs /bin/bash -x <<'EOF'
 su -
@@ -144,6 +158,9 @@ echo "==> AML device installed"
 #echo "(you can keep it safely as long as you're sure of no changes)"
 #rm -r platform-aml
 sync
+
+echo "Finalizing Rootfs creation"
+sh scripts/finalize.sh
 
 echo "Preparing rootfs base for SquashFS"
 
@@ -187,3 +204,5 @@ umount -l /mnt/volumio/rootfs/boot
 dmsetup remove_all
 losetup -d ${LOOP_DEV}
 sync
+
+md5sum "$IMG_FILE" > "${IMG_FILE}.md5"

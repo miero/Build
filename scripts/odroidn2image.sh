@@ -1,7 +1,7 @@
 #!/bin/sh
 
-# Default build for Raspbian
-ARCH="arm"
+# Default build for Debian 32bit (to be changed to armv8)
+ARCH="armv7"
 
 while getopts ":v:p:a:" opt; do
   case $opt in
@@ -18,7 +18,7 @@ while getopts ":v:p:a:" opt; do
 done
 
 BUILDDATE=$(date -I)
-IMG_FILE="Volumio${VERSION}-${BUILDDATE}-sparky.img"
+IMG_FILE="Volumio${VERSION}-${BUILDDATE}-odroidn2.img"
 
 if [ "$ARCH" = arm ]; then
   DISTRO="Raspbian"
@@ -30,11 +30,11 @@ echo "Creating Image File ${IMG_FILE} with $DISTRO rootfs"
 dd if=/dev/zero of=${IMG_FILE} bs=1M count=2800
 
 echo "Creating Image Bed"
-LOOP_DEV=`sudo losetup -f --show ${IMG_FILE}`
+LOOP_DEV=`losetup -f --show ${IMG_FILE}`
 
 parted -s "${LOOP_DEV}" mklabel msdos
-parted -s "${LOOP_DEV}" mkpart primary fat32 8 71
-parted -s "${LOOP_DEV}" mkpart primary ext3 71 2500
+parted -s "${LOOP_DEV}" mkpart primary fat32 1 64
+parted -s "${LOOP_DEV}" mkpart primary ext3 65 2500
 parted -s "${LOOP_DEV}" mkpart primary ext3 2500 100%
 parted -s "${LOOP_DEV}" set 1 boot on
 parted -s "${LOOP_DEV}" print
@@ -44,9 +44,7 @@ kpartx -s -a "${LOOP_DEV}"
 BOOT_PART=`echo /dev/mapper/"$( echo ${LOOP_DEV} | sed -e 's/.*\/\(\w*\)/\1/' )"p1`
 SYS_PART=`echo /dev/mapper/"$( echo ${LOOP_DEV} | sed -e 's/.*\/\(\w*\)/\1/' )"p2`
 DATA_PART=`echo /dev/mapper/"$( echo ${LOOP_DEV} | sed -e 's/.*\/\(\w*\)/\1/' )"p3`
-echo "Using: " ${BOOT_PART}
-echo "Using: " ${SYS_PART}
-echo "Using: " ${DATA_PART}
+
 if [ ! -b "${BOOT_PART}" ]
 then
 	echo "${BOOT_PART} doesn't exist"
@@ -59,23 +57,34 @@ mkfs -F -t ext4 -L volumio "${SYS_PART}"
 mkfs -F -t ext4 -L volumio_data "${DATA_PART}"
 sync
 
-echo "Preparing for the sparky kernel/ platform files"
-if [ -d platform-sparky ]
+echo "Preparing for the Odroid N2 kernel/ platform files"
+if [ -d ./platform-odroid/odroidn2 ]
 then
 	echo "Platform folder already exists - keeping it"
-    # if you really want to re-clone from the repo, then delete the platforms-sparky folder
+    # if you really want to re-clone from the repo, then delete the platform-odroid folder
+    # that will refresh all the odroid platforms, see below
+	cd platform-odroid
+	if [ -f odroidn2.tar.xz ]; then
+	   echo "Found a new tarball, unpacking..."
+	   rm -r odroidn2
+	   tar xfJ odroidn2.tar.xz
+	   rm odroidn2.tar.xz
+	fi
+	cd ..
 else
-	echo "Clone all sparky files from repo"
-	git clone --depth 1 https://github.com/volumio/platform-sparky.git platform-sparky
-	echo "Unpack the sparky platform files"
-    cd platform-sparky
-	tar xfJ sparky.tar.xz
+	echo "Getting sthe Odroid N2 files from repo"
+	mkdir platform-odroid
+	cd platform-odroid
+	[ ! -f odroidn2.tar.xz ] || rm odroidn2.tar.xz
+	wget https://github.com/volumio/platform-odroid/raw/master/odroidn2.tar.xz
+	echo "Unpacking the N2 platform files"
+	tar xfJ odroidn2.tar.xz
+	rm odroidn2.tar.xz
 	cd ..
 fi
 
-echo "Burning the bootloader and u-boot"
-dd if=platform-sparky/sparky/u-boot/bootloader.bin of=${LOOP_DEV} bs=512 seek=4097
-dd if=platform-sparky/sparky/u-boot/u-boot-dtb.img of=${LOOP_DEV} bs=512 seek=6144
+echo "Copying the bootloader"
+dd if=platform-odroid/odroidn2/uboot/u-boot.bin of=${LOOP_DEV} conv=fsync bs=512 seek=1
 sync
 
 echo "Preparing for Volumio rootfs"
@@ -83,7 +92,7 @@ if [ -d /mnt ]
 then
 	echo "/mount folder exist"
 else
-	sudo mkdir /mnt
+	mkdir /mnt
 fi
 if [ -d /mnt/volumio ]
 then
@@ -91,7 +100,7 @@ then
 	rm -rf /mnt/volumio/*
 else
 	echo "Creating Volumio Temp Directory"
-	sudo mkdir /mnt/volumio
+	mkdir /mnt/volumio
 fi
 
 echo "Creating mount point for the images partition"
@@ -103,25 +112,19 @@ mount -t vfat "${BOOT_PART}" /mnt/volumio/rootfs/boot
 
 echo "Copying Volumio RootFs"
 cp -pdR build/$ARCH/root/* /mnt/volumio/rootfs
+echo "Copying OdroidN2 boot files"
+cp platform-odroid/odroidn2/boot/boot.ini* /mnt/volumio/rootfs/boot
+cp platform-odroid/odroidn2/boot/meson64_odroidn2.dtb /mnt/volumio/rootfs/boot
+cp platform-odroid/odroidn2/boot/Image* /mnt/volumio/rootfs/boot
 
-echo "Copying sparky boot files, kernel, modules and firmware"
-cp platform-sparky/sparky/boot/* /mnt/volumio/rootfs/boot
-cp -pdR platform-sparky/sparky/lib/modules /mnt/volumio/rootfs/lib
-cp -pdR platform-sparky/sparky/lib/firmware /mnt/volumio/rootfs/lib
+echo "Copying OdroidN2 modules and firmware"
+cp -pdR platform-odroid/odroidn2/lib/modules /mnt/volumio/rootfs/lib/
 
-echo "Copying special hotspot.sh version for Sparky"
-cp platform-sparky/sparky/bin/hotspot.sh /mnt/volumio/rootfs/bin
-
-echo "Copying DSP firmware and license from allocom dsp git"
-# doing this here and not in config because cloning under chroot caused issues before"
-git clone http://github.com/allocom/piano-firmware allo
-cp -pdR allo/lib /mnt/volumio/rootfs
-rm -r allo
 sync
 
-echo "Preparing to run chroot for more sparky configuration"
-cp scripts/sparkyconfig.sh /mnt/volumio/rootfs
-cp scripts/initramfs/init /mnt/volumio/rootfs/root
+echo "Preparing to run chroot for more Odroid-N2 configuration"
+cp scripts/odroidn2config.sh /mnt/volumio/rootfs
+cp scripts/initramfs/init.nextarm /mnt/volumio/rootfs/root/init
 cp scripts/initramfs/mkinitramfs-custom.sh /mnt/volumio/rootfs/usr/local/sbin
 #copy the scripts for updating from usb
 wget -P /mnt/volumio/rootfs/root http://repo.volumio.org/Volumio2/Binaries/volumio-init-updater
@@ -130,8 +133,13 @@ mount /dev /mnt/volumio/rootfs/dev -o bind
 mount /proc /mnt/volumio/rootfs/proc -t proc
 mount /sys /mnt/volumio/rootfs/sys -t sysfs
 
-
 echo $PATCH > /mnt/volumio/rootfs/patch
+
+echo "UUID_DATA=$(blkid -s UUID -o value ${DATA_PART})
+UUID_IMG=$(blkid -s UUID -o value ${SYS_PART})
+UUID_BOOT=$(blkid -s UUID -o value ${BOOT_PART})
+" > /mnt/volumio/rootfs/root/init.sh
+chmod +x /mnt/volumio/rootfs/root/init.sh
 
 if [ -f "/mnt/volumio/rootfs/$PATCH/patch.sh" ] && [ -f "config.js" ]; then
         if [ -f "UIVARIANT" ] && [ -f "variant.js" ]; then
@@ -146,10 +154,9 @@ if [ -f "/mnt/volumio/rootfs/$PATCH/patch.sh" ] && [ -f "config.js" ]; then
         fi
 fi
 
-
 chroot /mnt/volumio/rootfs /bin/bash -x <<'EOF'
 su -
-/sparkyconfig.sh
+/odroidn2config.sh
 EOF
 
 UIVARIANT_FILE=/mnt/volumio/rootfs/UIVARIANT
@@ -159,19 +166,24 @@ if [ -f "${UIVARIANT_FILE}" ]; then
     rm $UIVARIANT_FILE
 fi
 
-#cleanup
-rm /mnt/volumio/rootfs/sparkyconfig.sh /mnt/volumio/rootfs/root/init
+echo "Cleaning up temp files"
+rm /mnt/volumio/rootfs/odroidn2config.sh /mnt/volumio/rootfs/root/init.sh /mnt/volumio/rootfs/root/init
 
-echo "Unmounting Temp devices"
+echo "Unmounting temp devices"
 umount -l /mnt/volumio/rootfs/dev
 umount -l /mnt/volumio/rootfs/proc
 umount -l /mnt/volumio/rootfs/sys
 
-echo "==> sparky device installed"
+echo "Copying LIRC configuration files for HK stock remote"
+cp platform-odroid/odroidn2/etc/lirc/lircd.conf /mnt/volumio/rootfs/etc/lirc
+cp platform-odroid/odroidn2/etc/lirc/hardware.conf /mnt/volumio/rootfs/etc/lirc
+cp platform-odroid/odroidn2/etc/lirc/lircrc /mnt/volumio/rootfs/etc/lirc
+
+echo "==> Odroid-N2 device installed"
 
 #echo "Removing temporary platform files"
 #echo "(you can keep it safely as long as you're sure of no changes)"
-#sudo rm -r platforms-sparky
+#rm -r platform-odroid
 sync
 
 echo "Finalizing Rootfs creation"
@@ -209,7 +221,7 @@ echo "Squash filesystem created"
 echo "Cleaning squash environment"
 rm -rf /mnt/squash
 
-#copy the squash image inside the image partition
+#copy the squash image inside the boot partition
 cp Volumio.sqsh /mnt/volumio/images/volumio_current.sqsh
 sync
 echo "Unmounting Temp Devices"

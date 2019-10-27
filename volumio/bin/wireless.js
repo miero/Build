@@ -18,6 +18,7 @@ var ifconfigHotspot = "ifconfig " + wlan + " 192.168.211.1 up";
 var ifconfigWlan = "ifconfig " + wlan + " up";
 var ifdeconfig = "sudo ip addr flush dev " + wlan + " && sudo ifconfig " + wlan + " down";
 var execSync = require('child_process').execSync;
+var ifconfig = require('/volumio/app/plugins/system_controller/network/lib/ifconfig.js');
 var conf = {};
 if (debug) {
 	var wpasupp = "wpa_supplicant -d -s -B -Dnl80211,wext -c/etc/wpa_supplicant/wpa_supplicant.conf -i" + wlan;
@@ -178,7 +179,6 @@ function startFlow() {
 
                 } else {
                     var SSID = undefined;
-                    var ifconfig = require('wireless-tools/ifconfig');
                     console.log("trying...");
                     try {
                         var SSID = execSync("/usr/bin/sudo /sbin/iwgetid -r", { uid: 1000, gid: 1000, encoding: 'utf8'});
@@ -218,6 +218,11 @@ function stop(callback) {
     });
 }
 
+
+if ( ! fs.existsSync("/sys/class/net/" + wlan + "/operstate") ) {
+    console.log("WIRELESS: No wireless interface, exiting");
+    process.exit(1);
+}
 
 if (process.argv.length < 2) {
     console.log("Use: start|stop");
